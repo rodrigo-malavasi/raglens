@@ -40,11 +40,12 @@
 
   .gauges{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
   @media(max-width:720px){.gauges{grid-template-columns:repeat(2,1fr)}}
-  .gauge{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 12px 12px;text-align:center}
-  .g-lab{font-size:10.5px;text-transform:uppercase;letter-spacing:1px;color:var(--dim)}
-  .g-arc{width:100%;max-width:138px;margin:4px auto 0;display:block}
-  .g-num{font-family:var(--mono);font-size:25px;font-weight:600;margin-top:-16px;letter-spacing:-.5px}
-  .g-sub{font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:3px}
+  .gauge{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;position:relative;overflow:hidden}
+  .gauge .stripe{position:absolute;left:0;top:0;bottom:0;width:3px}
+  .s-good{background:var(--good)}.s-warn{background:var(--warn)}.s-crit{background:var(--crit)}
+  .gauge .glab{font-size:10.5px;text-transform:uppercase;letter-spacing:1px;color:var(--dim)}
+  .gauge .gnum{font-family:var(--mono);font-size:32px;font-weight:600;margin-top:7px;letter-spacing:-1px}
+  .gauge .gsub{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-top:2px}
   .c-good{color:var(--good)}.c-warn{color:var(--warn)}.c-crit{color:var(--crit)}
 
   .skel{background:linear-gradient(90deg,var(--panel2) 25%,rgba(60,80,110,.35) 50%,var(--panel2) 75%);
@@ -105,6 +106,7 @@
   .toolbar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px;font-size:12.5px;color:var(--dim)}
   .drift{background:rgba(229,106,95,.08);border:1px solid rgba(229,106,95,.3);border-radius:10px;padding:12px 15px;font-size:13px;color:#f0b3ad;margin-top:16px}
   .drift.ok{background:rgba(84,193,126,.08);border-color:rgba(84,193,126,.3);color:#bfe9cd}
+  .drift.warn{background:rgba(226,165,63,.08);border-color:rgba(226,165,63,.3);color:#ecc582}
   .foot{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--faint);line-height:1.8}
   @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -325,16 +327,16 @@ function svgLine(series,{h=200,ymin=0,ymax=1,markX=null}={}){
 
 // ---- renders ----
 function renderSkeleton(){
-  $('#gauges').innerHTML=[0,0,0,0].map(()=>`<div class="gauge"><div class="g-lab skel">·····</div><div class="skel" style="height:52px;max-width:120px;margin:8px auto 0"></div><div class="g-num skel" style="margin-top:6px">···</div></div>`).join('');
+  $('#gauges').innerHTML=[0,0,0,0].map(()=>`<div class="gauge"><div class="glab skel" style="width:64px">·</div><div class="gnum skel" style="width:84px;height:30px;margin-top:9px">·</div><div class="gsub skel" style="width:52px;margin-top:7px">·</div></div>`).join('');
   ['rankhist','covfolders','perquery','sweep'].forEach(id=>{const el=$('#'+id);if(el)el.innerHTML='<div class="skel" style="height:180px;width:100%"></div>';});
 }
 function renderGauges(m){
   const h=CURH, cov=h.coverage_pct/100;
-  const g=[{lab:'cobertura',f:cov,val:pct(cov),sub:h.n_covered+'/'+h.n_source+' documentos',s:sev.coverage(cov)},
-    {lab:'hit@1',f:m['hit@1'],val:pct(m['hit@1']),sub:'top-1 correto',s:sev.hit1(m['hit@1'])},
-    {lab:'hit@5',f:m['hit@5'],val:pct(m['hit@5']),sub:'top-5 correto',s:sev.hit5(m['hit@5'])},
-    {lab:'MRR',f:m.mrr,val:m.mrr.toFixed(3),sub:'posição média',s:sev.mrr(m.mrr)}];
-  $('#gauges').innerHTML=g.map(c=>`<div class="gauge"><div class="g-lab">${c.lab}</div>${arcGauge(c.f,COL[c.s])}<div class="g-num c-${c.s}">${c.val}</div><div class="g-sub">${c.sub}</div></div>`).join('');
+  const g=[{lab:'cobertura',val:pct(cov),sub:h.n_covered+'/'+h.n_source+' documentos',s:sev.coverage(cov)},
+    {lab:'hit@1',val:pct(m['hit@1']),sub:'top-1 correto',s:sev.hit1(m['hit@1'])},
+    {lab:'hit@5',val:pct(m['hit@5']),sub:'top-5 correto',s:sev.hit5(m['hit@5'])},
+    {lab:'MRR',val:m.mrr.toFixed(3),sub:'posição média',s:sev.mrr(m.mrr)}];
+  $('#gauges').innerHTML=g.map(c=>`<div class="gauge"><div class="stripe s-${c.s}"></div><div class="glab">${c.lab}</div><div class="gnum tnum c-${c.s}">${c.val}</div><div class="gsub">${c.sub}</div></div>`).join('');
 }
 function renderRankHist(cases){
   const b={'#1':0,'#2–3':0,'#4–5':0,'#6–10':0,'miss':0};
@@ -488,12 +490,19 @@ renderSkeleton();
   CURH=await getHealth();
   if(!DATA){const b=await getEval(0.6,0.3,0.1,false); BASE={hit1:b.aggregate['hit@1'],hit5:b.aggregate['hit@5'],mrr:b.aggregate.mrr,recall5:b.aggregate['recall@5']};}
   const h=CURH,cov=h.coverage_pct/100;
-  const healthy=(h.unindexed.length+h.stale.length+h.orphan.length)===0;
+  const iss=h.unindexed.length+h.stale.length+h.orphan.length;
+  const minor = iss>0 && cov>=0.98 && h.unindexed.length===0;
   const drift=$('#drift');
-  drift.className=healthy?'drift ok':'drift';
-  drift.innerHTML=healthy
-    ? `<b>Índice íntegro:</b> ${pct(cov)} do vault indexado (${h.n_covered}/${h.n_source} documentos) · 0 não-indexados · 0 stale · 0 órfãos. O /sb-search enxerga tudo.`
-    : `<b>Achado do dogfood:</b> só ${pct(cov)} do vault está no índice — ${h.unindexed.length} não-indexados · ${h.stale.length} stale · ${h.orphan.length} órfãos. O RAG está cego nesses até um reindex full.`;
+  if(iss===0){
+    drift.className='drift ok';
+    drift.innerHTML=`<b>Índice íntegro:</b> ${pct(cov)} indexado (${h.n_covered}/${h.n_source} documentos) · 0 pendências. O /sb-search enxerga tudo.`;
+  } else if(minor){
+    drift.className='drift warn';
+    drift.innerHTML=`<b>Quase sincronizado:</b> ${pct(cov)} indexado · ${h.stale.length} stale · ${h.orphan.length} órfãos. Reindex incremental resolve — histórico/ADR não é urgente.`;
+  } else {
+    drift.className='drift';
+    drift.innerHTML=`<b>Índice desatualizado:</b> só ${pct(cov)} indexado — ${h.unindexed.length} não-indexados · ${h.stale.length} stale · ${h.orphan.length} órfãos. Reindex full recomendado.`;
+  }
   $('#addModeNote').textContent=LIVE?'gerar/editar/adicionar gravam direto no gabarito do vault.':'preview: gerar/editar/adicionar só na versão servidor.';
   $('#foot').innerHTML=`RagLens · produto FourCore · ${LIVE?'servidor Python ao vivo':'snapshot estático com dados reais'} · <b>python -m raglens serve</b>`;
   await runEval(false);
