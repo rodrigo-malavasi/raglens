@@ -1,0 +1,459 @@
+<title>RagLens — instrumento de qualidade de RAG</title>
+<style>
+  :root{
+    --bg:#0a0d12;--panel:#111721;--panel2:#182231;--line:#243040;--line2:#2f3e52;
+    --fg:#e8eef5;--dim:#8394a6;--faint:#5d6b7d;
+    --accent:#54d6c4;--accent2:#7f9cff;--accent-dim:#2b6f68;
+    --good:#54c17e;--warn:#e2a53f;--crit:#e56a5f;
+    --mono:"Cascadia Code",ui-monospace,"SF Mono",Consolas,monospace;
+    --sans:system-ui,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 500px at 82% -12%,#12202b 0%,transparent 58%),var(--bg);
+    color:var(--fg);font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1160px;margin:0 auto;padding:26px 22px 70px}
+  .tnum{font-variant-numeric:tabular-nums}
+  .mono{font-family:var(--mono)}
+  a{color:var(--accent)}
+
+  .top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+  .brand{display:flex;align-items:center;gap:12px}
+  .lens{width:30px;height:30px;border-radius:50%;border:2px solid var(--accent);position:relative;box-shadow:0 0 0 3px rgba(84,214,196,.12)}
+  .lens::after{content:"";position:absolute;inset:5px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#7ff0e2,var(--accent-dim))}
+  .brand h1{margin:0;font-size:20px;font-weight:650;letter-spacing:.3px}
+  .brand .tag{font-family:var(--mono);font-size:10.5px;color:var(--accent);letter-spacing:1.4px;text-transform:uppercase}
+  .meta{font-family:var(--mono);font-size:11.5px;color:var(--dim);text-align:right}
+  .meta b{color:var(--fg);font-weight:500}
+  .mode{display:inline-block;font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:12px;letter-spacing:.5px;margin-top:4px}
+  .mode.live{background:rgba(84,193,126,.16);color:var(--good)}
+  .mode.static{background:rgba(127,156,255,.16);color:var(--accent2)}
+
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:24px}
+  .tab{font-family:var(--sans);font-size:13.5px;color:var(--dim);background:none;border:none;
+    padding:11px 18px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tab:hover{color:var(--fg)}
+  .tab.on{color:var(--fg);border-bottom-color:var(--accent)}
+  .tab .b{font-family:var(--mono);font-size:11px;color:var(--faint);margin-left:6px}
+
+  .eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint);margin:0 0 12px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .grid{display:grid;gap:18px}
+  .g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+  @media(max-width:800px){.g2,.g3{grid-template-columns:1fr}}
+  section[hidden]{display:none}
+
+  .gauges{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+  @media(max-width:720px){.gauges{grid-template-columns:repeat(2,1fr)}}
+  .gauge{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;position:relative;overflow:hidden}
+  .gauge .lab{font-size:10.5px;text-transform:uppercase;letter-spacing:1px;color:var(--dim)}
+  .gauge .num{font-family:var(--mono);font-size:32px;font-weight:600;margin-top:7px;letter-spacing:-1px}
+  .gauge .sub{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-top:2px}
+  .gauge .stripe{position:absolute;left:0;top:0;bottom:0;width:3px}
+  .s-good{background:var(--good)}.s-warn{background:var(--warn)}.s-crit{background:var(--crit)}
+  .c-good{color:var(--good)}.c-warn{color:var(--warn)}.c-crit{color:var(--crit)}
+
+  h3.pt{margin:0 0 4px;font-size:14px;font-weight:600}
+  .psub{font-size:12px;color:var(--faint);margin:0 0 14px}
+  canvas{display:block;width:100%;border-radius:8px}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;font-size:11.5px;color:var(--dim)}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
+
+  .chan{display:grid;grid-template-columns:76px 1fr 44px;align-items:center;gap:12px;margin-bottom:16px}
+  .chan .cn{font-family:var(--mono);font-size:12px;color:var(--dim);text-transform:uppercase}
+  .chan .cv{font-family:var(--mono);font-size:15px;text-align:right;color:var(--accent)}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;background:linear-gradient(90deg,var(--accent-dim),var(--accent));outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--fg);border:3px solid var(--accent);cursor:grab}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--fg);border:3px solid var(--accent);cursor:grab}
+  input[type=range]:focus-visible{box-shadow:0 0 0 3px rgba(84,214,196,.35)}
+  .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  button.b{font-family:var(--sans);font-size:12.5px;border-radius:7px;padding:8px 13px;cursor:pointer;border:1px solid var(--line2);background:var(--panel2);color:var(--fg)}
+  button.b:hover{border-color:var(--accent)}
+  button.b.primary{background:var(--accent);color:#062a26;border-color:var(--accent);font-weight:600}
+  button.b:disabled{opacity:.45;cursor:not-allowed}
+  .lr{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+  .lr .lrtop{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px}
+  .lr .rv{font-family:var(--mono);font-size:15px}
+  .track{height:7px;border-radius:4px;background:var(--panel2);overflow:hidden}
+  .track>i{display:block;height:100%;border-radius:4px;background:var(--accent);transition:width .35s cubic-bezier(.2,.8,.2,1)}
+  .delta{font-family:var(--mono);font-size:11px;margin-left:6px}
+  .toast{font-family:var(--mono);font-size:11.5px;color:var(--good);min-height:16px}
+
+  .tablewrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:560px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--faint);font-weight:600}
+  td.doc{font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+  .chip{font-family:var(--mono);display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:600}
+  .chip.hit{background:rgba(84,193,126,.14);color:var(--good)}
+  .chip.miss{background:rgba(229,106,95,.14);color:var(--crit)}
+  .chip.best{background:rgba(84,214,196,.16);color:var(--accent)}
+  tr.exp{cursor:pointer}
+  tr.exp:hover td{background:rgba(127,156,255,.05)}
+  .detail td{background:var(--bg);font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .rk{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+  .rk .r{padding:2px 7px;border-radius:5px;background:var(--panel2);border:1px solid var(--line)}
+  .rk .r.h{border-color:var(--good);color:var(--good)}
+
+  input[type=text]{background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:7px;padding:8px 11px;font-size:13px;font-family:var(--sans)}
+  .sugg{display:inline-block;margin:5px 6px 0 0;padding:5px 10px;background:var(--panel2);border:1px solid var(--line);border-radius:16px;font-size:12px;cursor:pointer}
+  .sugg:hover{border-color:var(--accent)}
+  .toolbar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px;font-size:12.5px;color:var(--dim)}
+  .drift{background:rgba(229,106,95,.08);border:1px solid rgba(229,106,95,.3);border-radius:10px;padding:12px 15px;font-size:13px;color:#f0b3ad;margin-top:16px}
+  .foot{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--faint);line-height:1.8}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div class="brand"><div class="lens"></div>
+      <div><div class="tag">instrumento de RAG</div><h1>RagLens</h1></div></div>
+    <div class="meta" id="meta"></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" data-tab="pan">Panorama</button>
+    <button class="tab" data-tab="adj">Ajuste<span class="b" id="tb-adj"></span></button>
+    <button class="tab" data-tab="perg">Perguntas<span class="b" id="tb-perg"></span></button>
+  </div>
+
+  <!-- PANORAMA -->
+  <section id="pan">
+    <div class="gauges" id="gauges"></div>
+    <div class="grid g2">
+      <div class="panel">
+        <h3 class="pt">Mapa semântico do vault</h3>
+        <p class="psub">projeção 2D (PCA) de todos os chunks embedados · cor = pasta raiz</p>
+        <canvas id="scatter" height="360"></canvas>
+        <div class="legend" id="scatterLeg"></div>
+      </div>
+      <div class="panel">
+        <h3 class="pt">Onde o doc certo cai</h3>
+        <p class="psub">rank do 1º acerto por pergunta · #1 é o ideal, "miss" = fora do top-10</p>
+        <div id="rankhist"></div>
+      </div>
+    </div>
+    <div class="grid g2" style="margin-top:18px">
+      <div class="panel">
+        <h3 class="pt">Cobertura por pasta</h3>
+        <p class="psub">quanto de cada área do vault está no índice</p>
+        <div id="covfolders"></div>
+      </div>
+      <div class="panel">
+        <h3 class="pt">Nota por pergunta</h3>
+        <p class="psub">reciprocal rank de cada pergunta (mix atual) · ordenado</p>
+        <div id="perquery"></div>
+      </div>
+    </div>
+    <div class="drift" id="drift"></div>
+  </section>
+
+  <!-- AJUSTE -->
+  <section id="adj" hidden>
+    <div class="grid g2">
+      <div class="panel">
+        <h3 class="pt">Mesa de mix</h3>
+        <p class="psub">os 3 sinais do rerank · mova e a nota reage</p>
+        <div class="chan"><span class="cn">vetor</span><input type="range" id="wv" min="0" max="1" step="0.05" value="0.6"><span class="cv tnum" id="cv-v">0.60</span></div>
+        <div class="chan"><span class="cn">léxico</span><input type="range" id="wl" min="0" max="1" step="0.05" value="0.3"><span class="cv tnum" id="cv-l">0.30</span></div>
+        <div class="chan"><span class="cn">filename</span><input type="range" id="wb" min="0" max="1" step="0.05" value="0.1"><span class="cv tnum" id="cv-b">0.10</span></div>
+        <div class="btns">
+          <button class="b primary" id="btnRun">Executar</button>
+          <button class="b" id="btnSave">Salvar snapshot</button>
+          <button class="b" id="btnDefault">produção</button>
+          <button class="b" id="btnVec">só vetor</button>
+          <button class="b" id="btnLex">só léxico</button>
+        </div>
+        <p class="toast" id="toast"></p>
+        <div style="margin-top:14px" id="livereads"></div>
+      </div>
+      <div class="panel">
+        <h3 class="pt">Varredura de peso</h3>
+        <p class="psub">MRR conforme varia cada sinal (outros fixos) · linha pontilhada = mix atual</p>
+        <div id="sweep"></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:18px">
+      <h3 class="pt">Experimentos salvos</h3>
+      <p class="psub">cada snapshot é um ajuste registrado · melhor MRR destacado</p>
+      <div class="tablewrap"><table><thead><tr><th>#</th><th>pesos (v/l/f)</th><th>hit@1</th><th>hit@5</th><th>MRR</th><th></th></tr></thead><tbody id="exprows"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- PERGUNTAS -->
+  <section id="perg" hidden>
+    <div class="panel">
+      <div class="toolbar">
+        <label><input type="checkbox" id="onlyFail"> só falhas</label>
+        <span id="qcount"></span>
+        <span class="mono" style="color:var(--faint)">clique numa linha pra ver o top-5</span>
+      </div>
+      <div class="tablewrap"><table><thead><tr><th>Pergunta</th><th>Esperado</th><th>Veio no topo</th><th>Rank</th><th>recall@5</th><th>top-5</th></tr></thead><tbody id="qrows"></tbody></table></div>
+    </div>
+    <div class="panel" style="margin-top:18px">
+      <h3 class="pt">Gerar / adicionar pergunta</h3>
+      <p class="psub" id="addModeNote"></p>
+      <div class="btns">
+        <input type="text" id="docPath" placeholder="doc pra sugerir (ex: ARQUITETURA/CONCEITOS/RBAC.md)" style="flex:1;min-width:260px">
+        <button class="b" id="btnSuggest">Sugerir do doc</button>
+      </div>
+      <div id="suggestions" style="margin-top:10px"></div>
+      <div class="btns" style="margin-top:14px">
+        <input type="text" id="newQ" placeholder="nova pergunta" style="flex:1;min-width:220px">
+        <input type="text" id="newP" placeholder="doc esperado" style="flex:1;min-width:220px">
+        <button class="b primary" id="btnAdd">Adicionar</button>
+      </div>
+      <p class="toast" id="addToast"></p>
+    </div>
+  </section>
+
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+const DATA = __RAGLENS_DATA__;
+const LIVE = (DATA === null);
+const $ = s => document.querySelector(s);
+const pct = x => Math.round(x*100)+'%';
+const clamp = x => Math.max(0,Math.min(1,x));
+const short = p => p ? p.split('/').pop() : '—';
+const PALETTE = ['#54d6c4','#7f9cff','#e2a53f','#e56a5f','#54c17e','#c58bf0','#4bbcd6','#e58fb5','#9fd356','#d98f4b'];
+let CUR=null, localExperiments=[];
+
+async function fj(u,opt){ const r=await fetch(u,opt); return r.json(); }
+
+// ---- núcleo (espelha python) ----
+function rerank(cands,wv,wl,wb){
+  return Object.entries(cands).map(([p,c])=>[p, wv*c[0]+wl*c[1]+wb*c[2]]).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+}
+function localEval(wv,wl,wb){
+  let h1=0,h5=0,mrr=0,rec=0; const cases=[];
+  for(const g of DATA.golden){
+    const ranked=rerank(g.cands,wv,wl,wb).slice(0,10);
+    const exp=new Set(g.expected), top5=ranked.slice(0,5);
+    const hit1=exp.has(ranked[0]), hit5=top5.some(d=>exp.has(d));
+    let rank=null; for(let i=0;i<ranked.length;i++){if(exp.has(ranked[i])){rank=i+1;break;}}
+    const rr=rank?1/rank:0, r5=exp.size?top5.filter(d=>exp.has(d)).length/exp.size:0;
+    h1+=hit1;h5+=hit5;mrr+=rr;rec+=r5;
+    cases.push({query:g.query,expected:g.expected,ranked:top5,first_hit_rank:rank,hit1,hit5,recall5:r5,rr,tipo:g.tipo});
+  }
+  const n=DATA.golden.length;
+  return {aggregate:{n,'hit@1':h1/n,'hit@5':h5/n,mrr:mrr/n,'recall@5':rec/n},cases,weights:{vec:wv,lex:wl,boost:wb}};
+}
+async function getEval(wv,wl,wb,save){
+  if(LIVE) return fj(`/api/eval?wv=${wv}&wl=${wl}&wb=${wb}`+(save?'&save=1':''));
+  const r=localEval(wv,wl,wb);
+  if(save) localExperiments.push({weights:r.weights,aggregate:r.aggregate});
+  return r;
+}
+function localSweep(steps=11){
+  const xs=[...Array(steps)].map((_,i)=>Math.round(i/(steps-1)*100)/100);
+  const fixed={vec:[0.3,0.1],lex:[0.6,0.1],boost:[0.6,0.3]};
+  const out={};
+  for(const [axis,[a,b]] of Object.entries(fixed)){
+    out[axis]=xs.map(w=>{
+      const wv=axis==='vec'?w:a===0.3?0.3:(axis==='lex'?a:a);
+      let W;
+      if(axis==='vec')W=[w,a,b]; else if(axis==='lex')W=[a,w,b]; else W=[a,b,w];
+      const e=localEval(W[0],W[1],W[2]).aggregate;
+      return {w,hit5:e['hit@5'],mrr:e.mrr};
+    });
+  }
+  return {sweep:out};
+}
+const getHealth=()=>LIVE?fj('/api/health'):Promise.resolve(DATA.health);
+const getProjection=()=>LIVE?fj('/api/projection'):Promise.resolve(DATA.projection);
+const getCoverage=()=>LIVE?fj('/api/coverage_folders'):Promise.resolve(DATA.coverage_folders);
+const getSweep=()=>LIVE?fj('/api/sweep'):Promise.resolve(localSweep());
+const getTrend=async()=>{ if(LIVE) return fj('/api/trend'); return {trend:[...DATA.trend,...localExperiments.map(x=>({hit1:x.aggregate['hit@1'],hit5:x.aggregate['hit@5'],mrr:x.aggregate.mrr,weights:x.weights}))]}; };
+
+const sev={coverage:v=>v>=.95?'good':v>=.7?'warn':'crit',hit1:v=>v>=.7?'good':v>=.4?'warn':'crit',hit5:v=>v>=.85?'good':v>=.6?'warn':'crit',mrr:v=>v>=.7?'good':v>=.4?'warn':'crit'};
+
+// ---- SVG helpers ----
+function svgVBars(data,{h=180,fmt=pct,max=1}={}){
+  const W=Math.max(data.length*30,180),pb=22,pt=8,pl=6;
+  const bw=(W-pl)/data.length*0.66;
+  const bars=data.map((d,i)=>{
+    const x=pl+i*(W-pl)/data.length, bh=(d.v/max)*(h-pt-pb);
+    return `<rect x="${x.toFixed(1)}" y="${(h-pb-bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(bh,0).toFixed(1)}" rx="2" fill="${d.c||'var(--accent)'}"/>
+      <text x="${(x+bw/2).toFixed(1)}" y="${h-pb+13}" fill="var(--faint)" font-size="10" font-family="var(--mono)" text-anchor="middle">${d.l}</text>
+      <text x="${(x+bw/2).toFixed(1)}" y="${(h-pb-bh-4).toFixed(1)}" fill="var(--dim)" font-size="9.5" font-family="var(--mono)" text-anchor="middle">${d.t!=null?d.t:''}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${h}" width="100%" style="max-width:${W}px">${bars}</svg>`;
+}
+function svgHBars(rows){
+  const rowh=30, h=rows.length*rowh+6, labW=110, valW=44, W=520;
+  const barMax=W-labW-valW-8;
+  return `<svg viewBox="0 0 ${W} ${h}" width="100%">`+rows.map((r,i)=>{
+    const y=i*rowh+4, w=r.frac*barMax;
+    return `<text x="0" y="${y+18}" fill="var(--dim)" font-size="11.5" font-family="var(--mono)">${r.label}</text>
+      <rect x="${labW}" y="${y+6}" width="${barMax}" height="13" rx="3" fill="var(--panel2)"/>
+      <rect x="${labW}" y="${y+6}" width="${w.toFixed(1)}" height="13" rx="3" fill="${r.c||'var(--accent)'}"/>
+      <text x="${W-2}" y="${y+18}" fill="var(--fg)" font-size="11" font-family="var(--mono)" text-anchor="end">${r.val}</text>`;
+  }).join('')+`</svg>`;
+}
+function svgLine(series,{h=200,ymin=0,ymax=1,markX=null}={}){
+  const W=440,pl=30,pr=12,pt=12,pb=22;
+  const xs=v=>pl+v*(W-pl-pr), ys=v=>pt+(1-(v-ymin)/(ymax-ymin))*(h-pt-pb);
+  const grid=[ymin,(ymin+ymax)/2,ymax].map(v=>`<line x1="${pl}" y1="${ys(v).toFixed(1)}" x2="${W-pr}" y2="${ys(v).toFixed(1)}" stroke="var(--line)"/><text x="2" y="${(ys(v)+3).toFixed(1)}" fill="var(--faint)" font-size="9" font-family="var(--mono)">${Math.round(v*100)}</text>`).join('');
+  const paths=series.map(s=>{
+    const d=s.pts.map((p,i)=>(i?'L':'M')+xs(p[0]).toFixed(1)+' '+ys(p[1]).toFixed(1)).join(' ');
+    const dots=s.pts.map(p=>`<circle cx="${xs(p[0]).toFixed(1)}" cy="${ys(p[1]).toFixed(1)}" r="2.5" fill="${s.c}"/>`).join('');
+    return `<path d="${d}" fill="none" stroke="${s.c}" stroke-width="2"/>${dots}`;
+  }).join('');
+  const mark=markX!=null?`<line x1="${xs(markX).toFixed(1)}" y1="${pt}" x2="${xs(markX).toFixed(1)}" y2="${h-pb}" stroke="var(--accent)" stroke-dasharray="3 3" opacity=".7"/>`:'';
+  const leg=series.map((s,i)=>`<tspan fill="${s.c}" dx="${i?14:0}">■</tspan> <tspan fill="var(--dim)">${s.name}</tspan>`).join('');
+  return `<svg viewBox="0 0 ${W} ${h}" width="100%">${grid}${mark}${paths}<text x="${pl}" y="${h-4}" font-size="10" font-family="var(--mono)">${leg}</text></svg>`;
+}
+
+// ---- renders ----
+function renderGauges(m){
+  const h=CURH, cov=h.coverage_pct/100;
+  const g=[{lab:'cobertura',val:pct(cov),sub:h.n_covered+'/'+h.n_source+' docs',s:sev.coverage(cov)},
+    {lab:'hit@1',val:pct(m['hit@1']),sub:'top-1 correto',s:sev.hit1(m['hit@1'])},
+    {lab:'hit@5',val:pct(m['hit@5']),sub:'top-5 correto',s:sev.hit5(m['hit@5'])},
+    {lab:'MRR',val:m.mrr.toFixed(3),sub:'posição média',s:sev.mrr(m.mrr)}];
+  $('#gauges').innerHTML=g.map(c=>`<div class="gauge"><div class="stripe s-${c.s}"></div><div class="lab">${c.lab}</div><div class="num tnum c-${c.s}">${c.val}</div><div class="sub">${c.sub}</div></div>`).join('');
+}
+function renderRankHist(cases){
+  const buckets={'#1':0,'#2':0,'#3':0,'#4-5':0,'#6-10':0,'miss':0};
+  cases.forEach(c=>{const r=c.first_hit_rank; if(!r)buckets.miss++;else if(r===1)buckets['#1']++;else if(r===2)buckets['#2']++;else if(r===3)buckets['#3']++;else if(r<=5)buckets['#4-5']++;else buckets['#6-10']++;});
+  const max=Math.max(...Object.values(buckets),1);
+  const cols={'#1':'var(--good)','#2':'var(--accent)','#3':'var(--accent)','#4-5':'var(--warn)','#6-10':'var(--warn)','miss':'var(--crit)'};
+  $('#rankhist').innerHTML=svgVBars(Object.entries(buckets).map(([l,v])=>({l,v,t:v,c:cols[l]})),{max,h:200});
+}
+function renderPerQuery(cases){
+  const rows=[...cases].sort((a,b)=>b.rr-a.rr).map((c,i)=>({l:i+1,v:c.rr,t:'',c:c.rr>=1?'var(--good)':c.rr>0?'var(--accent)':'var(--crit)'}));
+  $('#perquery').innerHTML=svgVBars(rows,{max:1,h:200});
+}
+async function renderScatter(){
+  const pr=await getProjection(); if(!pr||!pr.points)return;
+  const cv=$('#scatter'), dpr=window.devicePixelRatio||1;
+  const cw=cv.clientWidth||520, ch=360;
+  cv.width=cw*dpr; cv.height=ch*dpr;
+  const ctx=cv.getContext('2d'); ctx.scale(dpr,dpr); ctx.clearRect(0,0,cw,ch);
+  const pad=16, W=cw-pad*2, H=ch-pad*2;
+  ctx.strokeStyle='rgba(255,255,255,.05)'; ctx.strokeRect(pad,pad,W,H);
+  for(const p of pr.points){
+    const x=pad+(p[0]+1)/2*W, y=pad+(1-(p[1]+1)/2)*H;
+    ctx.fillStyle=PALETTE[p[2]%PALETTE.length]; ctx.globalAlpha=.62;
+    ctx.beginPath(); ctx.arc(x,y,2.1,0,7); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  $('#scatterLeg').innerHTML=pr.groups.map((g,i)=>`<span><i style="background:${PALETTE[i%PALETTE.length]}"></i>${g}</span>`).join('')+` <span style="color:var(--faint)">· ${pr.points.length} chunks · var 2D ${pct(pr.var)}</span>`;
+}
+async function renderCoverage(){
+  const cf=await getCoverage(); if(!cf||!cf.folders)return;
+  const rows=cf.folders.map(f=>{const frac=f.source?f.indexed/f.source:0;
+    return {label:f.folder.length>14?f.folder.slice(0,13)+'…':f.folder,frac,val:`${f.indexed}/${f.source}`,c:frac>=.95?'var(--good)':frac>=.6?'var(--warn)':'var(--crit)'};});
+  $('#covfolders').innerHTML=svgHBars(rows);
+}
+async function renderSweep(){
+  const s=(await getSweep()).sweep; if(!s)return;
+  const wv=+$('#wv').value;
+  const series=[{name:'vetor',c:'#54d6c4',pts:s.vec.map(p=>[p.w,p.mrr])},
+    {name:'léxico',c:'#7f9cff',pts:s.lex.map(p=>[p.w,p.mrr])},
+    {name:'filename',c:'#e2a53f',pts:s.boost.map(p=>[p.w,p.mrr])}];
+  $('#sweep').innerHTML=svgLine(series,{ymin:0.3,ymax:0.9,markX:wv});
+}
+async function renderExperiments(){
+  const t=(await getTrend()).trend;
+  if(!t.length){$('#exprows').innerHTML='<tr><td colspan="6" style="color:var(--faint)">salve um snapshot pra registrar.</td></tr>';return;}
+  const best=Math.max(...t.map(x=>x.mrr));
+  $('#exprows').innerHTML=t.map((x,i)=>{const w=x.weights||{};
+    return `<tr><td class="mono">${i+1}</td><td class="mono">${(w.vec??'—')}/${(w.lex??'—')}/${(w.boost??'—')}</td>
+      <td class="mono">${pct(x.hit1||0)}</td><td class="mono">${pct(x.hit5)}</td>
+      <td class="mono">${x.mrr.toFixed(3)} ${x.mrr>=best-1e-9?'<span class="chip best">melhor</span>':''}</td><td></td></tr>`;}).join('');
+}
+function deltaSpan(cur,base){const d=cur-base;if(Math.abs(d)<1e-6)return '<span class="delta" style="color:var(--faint)">=</span>';const c=d>0?'good':'crit';return `<span class="delta c-${c}">${d>0?'▲':'▼'}${Math.round(Math.abs(d)*100)}pt</span>`;}
+function renderLive(m){
+  const B=DATA?DATA.baseline:BASE;
+  const items=[['hit@1',m['hit@1'],B.hit1],['hit@5',m['hit@5'],B.hit5],['recall@5',m['recall@5'],B.recall5],['MRR',m.mrr,B.mrr]];
+  $('#livereads').innerHTML=items.map(([l,v,b])=>`<div class="lr"><div class="lrtop"><span>${l} ${deltaSpan(v,b)}</span><span class="rv tnum">${l==='MRR'?v.toFixed(3):pct(v)}</span></div><div class="track"><i style="width:${clamp(v)*100}%"></i></div></div>`).join('');
+}
+function renderQuestions(cases){
+  const only=$('#onlyFail').checked;
+  const cs=[...cases].sort((a,b)=>(a.hit5-b.hit5)||((b.first_hit_rank||99)-(a.first_hit_rank||99))).filter(c=>!only||!c.hit5);
+  $('#qcount').textContent=`${cases.length} perguntas · ${cases.filter(c=>!c.hit5).length} falhas`;
+  $('#qrows').innerHTML=cs.map((c,i)=>{
+    const exp=new Set(c.expected);
+    const rk=c.ranked.map((d,j)=>`<span class="r ${exp.has(d)?'h':''}">#${j+1} ${short(d)}</span>`).join('');
+    return `<tr class="exp" data-i="${i}"><td>${c.query}</td><td class="doc">${c.expected.map(short).join('<br>')}</td>
+      <td class="doc">${short(c.ranked[0])}</td><td class="mono">${c.first_hit_rank?('#'+c.first_hit_rank):'—'}</td>
+      <td class="mono">${pct(c.recall5)}</td><td><span class="chip ${c.hit5?'hit':'miss'}">${c.hit5?'hit':'miss'}</span></td></tr>
+      <tr class="detail" data-d="${i}" hidden><td colspan="6"><div class="rk">${rk}</div></td></tr>`;
+  }).join('');
+  document.querySelectorAll('#qrows tr.exp').forEach(tr=>tr.addEventListener('click',()=>{const d=$(`#qrows tr.detail[data-d="${tr.dataset.i}"]`);if(d)d.hidden=!d.hidden;}));
+}
+
+let CURH=null, BASE=null;
+function updateFromEval(res){
+  CUR=res; const m=res.aggregate;
+  renderGauges(m); renderRankHist(res.cases); renderPerQuery(res.cases);
+  renderLive(m); renderQuestions(res.cases);
+}
+async function runEval(save){
+  const wv=+$('#wv').value,wl=+$('#wl').value,wb=+$('#wb').value;
+  $('#cv-v').textContent=wv.toFixed(2);$('#cv-l').textContent=wl.toFixed(2);$('#cv-b').textContent=wb.toFixed(2);
+  if(save)$('#toast').textContent='salvando…';
+  const res=await getEval(wv,wl,wb,save);
+  if(res.error){$('#toast').textContent='erro: '+res.error;return;}
+  updateFromEval(res);
+  await renderSweep();
+  if(save){$('#toast').textContent=LIVE?('snapshot salvo ✓'+(res.saved?' ('+res.saved+')':'')):'snapshot salvo (memória — versão servidor persiste)';await renderExperiments();}
+  else $('#toast').textContent='';
+}
+function setW(v,l,b){$('#wv').value=v;$('#wl').value=l;$('#wb').value=b;runEval(false);}
+
+// tabs
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  t.classList.add('on');
+  ['pan','adj','perg'].forEach(id=>$('#'+id).hidden=(id!==t.dataset.tab));
+  if(t.dataset.tab==='pan') renderScatter();
+  if(t.dataset.tab==='adj'){renderSweep();renderExperiments();}
+}));
+
+let deb;
+['wv','wl','wb'].forEach(id=>$('#'+id).addEventListener('input',()=>{clearTimeout(deb);deb=setTimeout(()=>runEval(false),LIVE?260:60);}));
+$('#btnRun').addEventListener('click',()=>runEval(false));
+$('#btnSave').addEventListener('click',()=>runEval(true));
+$('#btnDefault').addEventListener('click',()=>setW(0.6,0.3,0.1));
+$('#btnVec').addEventListener('click',()=>setW(1,0,0));
+$('#btnLex').addEventListener('click',()=>setW(0,1,0));
+$('#onlyFail').addEventListener('change',()=>{if(CUR)renderQuestions(CUR.cases);});
+window.addEventListener('resize',()=>{clearTimeout(window._rz);window._rz=setTimeout(renderScatter,200);});
+
+// perguntas: suggest + add
+$('#btnSuggest').addEventListener('click',async()=>{
+  const p=$('#docPath').value.trim(); if(!p)return;
+  if(!LIVE){$('#suggestions').innerHTML='<span style="color:var(--faint)">sugestão lê o doc no disco — só na versão servidor.</span>';return;}
+  const r=await fj('/api/suggest?path='+encodeURIComponent(p));
+  if(r.error){$('#suggestions').innerHTML='<span style="color:var(--faint)">'+r.error+'</span>';return;}
+  $('#suggestions').innerHTML=r.suggestions.map(s=>`<span class="sugg" data-q="${s}" data-p="${p}">＋ ${s}</span>`).join('')||'<span style="color:var(--faint)">sem headers.</span>';
+  document.querySelectorAll('.sugg').forEach(el=>el.addEventListener('click',()=>{$('#newQ').value=el.dataset.q;$('#newP').value=el.dataset.p;}));
+});
+$('#btnAdd').addEventListener('click',async()=>{
+  const query=$('#newQ').value.trim(),p=$('#newP').value.trim();
+  if(!query||!p){$('#addToast').textContent='preencha os dois.';return;}
+  if(!LIVE){$('#addToast').textContent='adicionar grava no gabarito — só na versão servidor (python -m raglens serve).';return;}
+  const j=await fj('/api/golden',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query,expected_paths:[p],tipo:'manual'})});
+  $('#addToast').textContent=j.ok?'adicionado ✓ recarregue pra reavaliar.':'erro: '+(j.error||'?');
+  if(j.ok){$('#newQ').value='';$('#newP').value='';}
+});
+
+// init
+(async function(){
+  CURH=await getHealth();
+  if(!DATA){ // live: baseline = eval default
+    const b=await getEval(0.6,0.3,0.1,false); BASE={hit1:b.aggregate['hit@1'],hit5:b.aggregate['hit@5'],mrr:b.aggregate.mrr,recall5:b.aggregate['recall@5']};
+  }
+  $('#meta').innerHTML=`adapter <b>${CURH.adapter}</b> · ${DATA?DATA.golden.length:'?'} perguntas · ${CURH.n_source} docs<br><span class="mode ${LIVE?'live':'static'}">${LIVE?'● servidor · executar/salvar ativos':'○ snapshot · dados reais embutidos'}</span>`;
+  $('#tb-adj').textContent=''; $('#tb-perg').textContent='';
+  const h=CURH,cov=h.coverage_pct/100;
+  $('#drift').innerHTML=`<b>Achado do dogfood:</b> só ${pct(cov)} do vault está no índice — ${h.unindexed.length} docs nunca entraram, ${h.orphan.length} órfãos de renomeações. O RAG está cego nesses até um reindex full.`;
+  $('#addModeNote').textContent=LIVE?'grava direto no gabarito do vault.':'preview: adicionar/sugerir só na versão servidor.';
+  $('#foot').innerHTML=`RagLens · produto FourCore · ${LIVE?'servidor Python ao vivo':'snapshot estático com dados reais'} · <b>python -m raglens serve</b>`;
+  await runEval(false);
+  await renderScatter(); await renderCoverage();
+})();
+</script>

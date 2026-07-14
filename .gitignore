@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+# dados de instancia (gabarito/snapshots do vault do usuario) nao vao pro produto
+/instance/
+*.db
+.env
+.env.*
