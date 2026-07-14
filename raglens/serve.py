@@ -200,14 +200,56 @@ def _suggest(rel: str) -> dict:
     return {"doc": rel, "expected_paths": [rel], "suggestions": sugg[:10]}
 
 
+def _write_golden(items: list[dict]) -> None:
+    with open(_golden_path(), "w", encoding="utf-8") as fh:
+        for it in items:
+            fh.write(json.dumps({
+                "query": it["query"],
+                "expected_paths": it.get("expected_paths", []),
+                "tipo": it.get("tipo", "manual"),
+            }, ensure_ascii=False) + "\n")
+
+
 def _append_golden(item: dict) -> None:
-    line = json.dumps({
-        "query": item["query"],
-        "expected_paths": item.get("expected_paths", []),
-        "tipo": item.get("tipo", "manual"),
-    }, ensure_ascii=False)
-    with open(_golden_path(), "a", encoding="utf-8") as fh:
-        fh.write(line + "\n")
+    items = load_golden(_golden_path())
+    items.append(item)
+    _write_golden(items)
+
+
+def _edit_golden(index: int, item: dict) -> None:
+    items = load_golden(_golden_path())
+    if not (0 <= index < len(items)):
+        raise IndexError("indice fora do gabarito")
+    items[index] = item
+    _write_golden(items)
+
+
+def _delete_golden(index: int) -> None:
+    items = load_golden(_golden_path())
+    if not (0 <= index < len(items)):
+        raise IndexError("indice fora do gabarito")
+    del items[index]
+    _write_golden(items)
+
+
+def _generate(n: int = 8) -> dict:
+    import random
+
+    idx_ids = {d.doc_id for d in STATE.adapter.indexed_docs()}
+    existing = {g["query"] for g in load_golden(_golden_path())}
+    pool = [d.doc_id for d in STATE.adapter.source_docs()
+            if d.doc_id in idx_ids and d.doc_id.endswith(".md")]
+    random.shuffle(pool)
+    props = []
+    for rel in pool:
+        s = _suggest(rel)
+        for q in s.get("suggestions", []):
+            if q not in existing:
+                props.append({"query": q, "expected_paths": [rel], "tipo": "gerada"})
+                break
+        if len(props) >= n:
+            break
+    return {"proposals": props}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -251,19 +293,46 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(_coverage_folders())
             if u.path == "/api/suggest":
                 return self._json(_suggest(q.get("path", [""])[0]))
+            if u.path == "/api/generate":
+                return self._json(_generate(int(q.get("n", ["8"])[0])))
             return self._json({"error": "rota nao encontrada"}, 404)
         except Exception as e:  # noqa: BLE001
             return self._json({"error": str(e)}, 500)
 
+    def _body(self):
+        n = int(self.headers.get("Content-Length", 0))
+        return json.loads(self.rfile.read(n) or b"{}")
+
     def do_POST(self):
         u = urlparse(self.path)
         try:
-            n = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(n) or b"{}")
+            body = self._body()
             if u.path == "/api/golden":
                 if not body.get("query") or not body.get("expected_paths"):
                     return self._json({"error": "query e expected_paths obrigatorios"}, 400)
                 _append_golden(body)
+                return self._json({"ok": True})
+            return self._json({"error": "rota nao encontrada"}, 404)
+        except Exception as e:  # noqa: BLE001
+            return self._json({"error": str(e)}, 500)
+
+    def do_PUT(self):
+        u = urlparse(self.path)
+        try:
+            body = self._body()
+            if u.path == "/api/golden":
+                _edit_golden(int(body["index"]), body)
+                return self._json({"ok": True})
+            return self._json({"error": "rota nao encontrada"}, 404)
+        except Exception as e:  # noqa: BLE001
+            return self._json({"error": str(e)}, 500)
+
+    def do_DELETE(self):
+        u = urlparse(self.path)
+        try:
+            body = self._body()
+            if u.path == "/api/golden":
+                _delete_golden(int(body["index"]))
                 return self._json({"ok": True})
             return self._json({"error": "rota nao encontrada"}, 404)
         except Exception as e:  # noqa: BLE001
