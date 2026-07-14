@@ -99,6 +99,7 @@
   .sugg:hover{border-color:var(--accent)}
   .toolbar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px;font-size:12.5px;color:var(--dim)}
   .drift{background:rgba(229,106,95,.08);border:1px solid rgba(229,106,95,.3);border-radius:10px;padding:12px 15px;font-size:13px;color:#f0b3ad;margin-top:16px}
+  .drift.ok{background:rgba(84,193,126,.08);border-color:rgba(84,193,126,.3);color:#bfe9cd}
   .foot{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--faint);line-height:1.8}
   @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -450,7 +451,15 @@ $('#btnAdd').addEventListener('click',async()=>{
   $('#meta').innerHTML=`adapter <b>${CURH.adapter}</b> · ${DATA?DATA.golden.length:'?'} perguntas · ${CURH.n_source} docs<br><span class="mode ${LIVE?'live':'static'}">${LIVE?'● servidor · executar/salvar ativos':'○ snapshot · dados reais embutidos'}</span>`;
   $('#tb-adj').textContent=''; $('#tb-perg').textContent='';
   const h=CURH,cov=h.coverage_pct/100;
-  $('#drift').innerHTML=`<b>Achado do dogfood:</b> só ${pct(cov)} do vault está no índice — ${h.unindexed.length} docs nunca entraram, ${h.orphan.length} órfãos de renomeações. O RAG está cego nesses até um reindex full.`;
+  const healthy=(h.unindexed.length+h.stale.length+h.orphan.length)===0;
+  const drift=$('#drift');
+  if(healthy){
+    drift.className='drift ok';
+    drift.innerHTML=`<b>Índice íntegro:</b> ${pct(cov)} do vault indexado (${h.n_covered}/${h.n_source} docs) · 0 não-indexados · 0 stale · 0 órfãos. O /sb-search enxerga tudo.`;
+  } else {
+    drift.className='drift';
+    drift.innerHTML=`<b>Achado do dogfood:</b> só ${pct(cov)} do vault está no índice — ${h.unindexed.length} não-indexados · ${h.stale.length} stale · ${h.orphan.length} órfãos. O RAG está cego nesses até um reindex full.`;
+  }
   $('#addModeNote').textContent=LIVE?'grava direto no gabarito do vault.':'preview: adicionar/sugerir só na versão servidor.';
   $('#foot').innerHTML=`RagLens · produto FourCore · ${LIVE?'servidor Python ao vivo':'snapshot estático com dados reais'} · <b>python -m raglens serve</b>`;
   await runEval(false);
