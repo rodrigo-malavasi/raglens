@@ -119,6 +119,8 @@
   .help .sema span{display:flex;align-items:center;gap:6px;color:var(--dim)}
   .help .sema i{width:9px;height:9px;border-radius:2px;display:inline-block}
   .foot{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--faint);line-height:1.8}
+  .foot a{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent}
+  .foot a:hover{border-bottom-color:var(--accent)}
   @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
@@ -579,7 +581,7 @@ renderSkeleton();
     drift.innerHTML=`<b>Índice desatualizado:</b> só ${pct(cov)} indexado — ${h.unindexed.length} não-indexados · ${h.stale.length} stale · ${h.orphan.length} órfãos. Reindex full recomendado.`;
   }
   $('#addModeNote').textContent=LIVE?'gerar/editar/adicionar gravam direto no gabarito do vault.':'preview: gerar/editar/adicionar só na versão servidor.';
-  $('#foot').innerHTML=`RagLens · produto FourCore · ${LIVE?'servidor Python ao vivo':'snapshot estático com dados reais'} · <b>python -m raglens serve</b>`;
+  $('#foot').innerHTML=`RagLens · produto FourCore · ${LIVE?'servidor Python ao vivo':'snapshot estático com dados reais'} · <b>python -m raglens serve</b> · <a href="https://github.com/rodrigo-malavasi/raglens" target="_blank" rel="noopener">código no GitHub</a>`;
   await runEval(false);
   $('#meta').innerHTML=`adapter <b>${esc(CURH.adapter)}</b> · ${CUR.aggregate.n} perguntas · ${CURH.n_source} documentos<br><span class="mode ${LIVE?'live':'static'}">${LIVE?'● servidor · executar / salvar / editar ativos':'○ snapshot · dados reais embutidos'}</span>`;
   await renderScatter(); await renderCoverage();
