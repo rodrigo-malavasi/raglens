@@ -58,9 +58,24 @@
   canvas{display:block;width:100%;border-radius:8px}
   .legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;font-size:11.5px;color:var(--dim)}
   .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
-  .donut-leg{display:flex;flex-direction:column;gap:7px;font-size:12.5px;font-family:var(--mono);min-width:150px}
+  .donut-leg{display:flex;flex-direction:column;gap:10px;font-size:12.5px;font-family:var(--mono);min-width:150px;flex:1 1 240px}
   .donut-leg .row{display:flex;align-items:center;gap:8px;color:var(--dim)}
-  .donut-leg i{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .donut-leg i{width:11px;height:11px;border-radius:3px;display:inline-block;flex:0 0 auto}
+  .donut-leg .dbar{flex:1 1 auto;min-width:40px;height:6px;border-radius:3px;background:var(--panel2);margin-left:4px;overflow:hidden}
+  .donut-leg .dbar i{display:block;height:100%;width:0;border-radius:3px}
+  .donut-leg .dpct{color:var(--faint);font-size:11px;min-width:30px;text-align:right}
+  .donut-leg b{min-width:22px;text-align:right}
+  .misslist{border-top:1px solid var(--line);padding-top:12px;font-size:12px}
+  .misshead{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);margin-bottom:9px}
+  .misslist .row{display:flex;align-items:baseline;gap:9px;padding:4px 0;color:var(--dim);line-height:1.4}
+  .misslist .rk{font-family:var(--mono);font-size:11px;color:#4bbcd6;flex:0 0 34px}
+  .misslist .q{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .misslist .got{font-family:var(--mono);font-size:10.5px;color:var(--faint);flex:0 0 auto;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .misslist .more{margin-top:8px;font-size:11px;color:var(--faint)}
+  .statrow{display:flex;gap:10px;border-top:1px solid var(--line);padding-top:14px;flex-wrap:wrap}
+  .statrow .st{flex:1 1 84px;background:var(--panel2);border-radius:8px;padding:10px 12px}
+  .statrow .stv{font-family:var(--mono);font-size:17px;color:var(--fg)}
+  .statrow .stl{font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
 
   .chan{display:grid;grid-template-columns:76px 1fr 44px;align-items:center;gap:12px;margin-bottom:16px}
   .chan .cn{font-family:var(--mono);font-size:12px;color:var(--dim);text-transform:uppercase}
@@ -147,11 +162,13 @@
         <p class="psub">projeção 2D (PCA) de todos os chunks embedados · cor = pasta raiz</p>
         <canvas id="scatter" height="360"></canvas>
         <div class="legend" id="scatterLeg"></div>
+        <p class="psub" id="scatterFoot" style="margin-top:8px"></p>
       </div>
       <div class="panel">
         <h3 class="pt">Onde o documento certo cai</h3>
         <p class="psub">distribuição do rank do 1º acerto · #1 é o ideal · miss = fora do top-10</p>
         <div id="rankhist"></div>
+        <div id="rankmiss" style="margin-top:16px"></div>
       </div>
     </div>
     <div class="grid g2" style="margin-top:18px">
@@ -159,11 +176,13 @@
         <h3 class="pt">Cobertura por pasta</h3>
         <p class="psub">quanto de cada área do vault está no índice</p>
         <div id="covfolders"></div>
+        <div id="covstats" style="margin-top:16px"></div>
       </div>
       <div class="panel">
         <h3 class="pt">Nota por pergunta</h3>
         <p class="psub">reciprocal rank de cada pergunta (mix atual) · ordenado</p>
         <div id="perquery"></div>
+        <p class="psub" id="perqueryFoot" style="margin-top:8px"></p>
       </div>
     </div>
     <div class="drift" id="drift"></div>
@@ -371,14 +390,26 @@ function svgDonut(segs){
     <svg viewBox="0 0 140 140" width="152" style="flex:0 0 auto">${parts}
       <text x="70" y="66" text-anchor="middle" fill="var(--fg)" font-size="24" font-family="var(--mono)" font-weight="600">${total}</text>
       <text x="70" y="83" text-anchor="middle" fill="var(--faint)" font-size="9" font-family="var(--mono)">perguntas</text></svg>
-    <div class="donut-leg">${segs.map(s=>`<div class="row"><i style="background:${s.color}"></i>${s.label}<b style="color:var(--fg);margin-left:auto">${s.value}</b></div>`).join('')}</div></div>`;
+    <div class="donut-leg">${segs.map(s=>{const f=s.value/total;
+      return `<div class="row"><i style="background:${s.color}"></i>${s.label}
+        <span class="dbar"><i style="width:${(f*100).toFixed(1)}%;background:${s.color}"></i></span>
+        <b style="color:${s.value?'var(--fg)':'var(--faint)'}">${s.value}</b>
+        <span class="dpct">${s.value?Math.round(f*100)+'%':'—'}</span></div>`;}).join('')}</div></div>`;
 }
-function svgVBars(data,{h=200,max=1}={}){
-  const W=Math.max(data.length*30,180),pb=22,pl=6, bw=(W-pl)/data.length*0.66;
-  return `<svg viewBox="0 0 ${W} ${h}" width="100%" style="max-width:${W}px">`+data.map((d,i)=>{
-    const x=pl+i*(W-pl)/data.length, bh=(d.v/max)*(h-8-pb);
-    return `<rect x="${x.toFixed(1)}" y="${(h-pb-bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(bh,0).toFixed(1)}" rx="2" fill="${d.c||'var(--accent)'}"/>
-      <text x="${(x+bw/2).toFixed(1)}" y="${h-pb+13}" fill="var(--faint)" font-size="10" font-family="var(--mono)" text-anchor="middle">${d.l}</text>
+// ticks: valores do eixo Y a rotular. Sem eles a barra mostra ordenação e esconde magnitude.
+// labelEvery: com muitas barras o rótulo do X vira borrão — rotula 1 a cada N.
+// W é FIXO: viewBox largo (30px/barra) escala stroke e fonte pra sub-pixel quando o SVG
+// é espremido em width:100% — gridline de 1px vira 0.3px e some.
+function svgVBars(data,{h=200,max=1,ticks=null,labelEvery=1,yfmt=v=>v}={}){
+  const pl=ticks?26:6, W=520,pb=22, bw=Math.max((W-pl)/data.length*0.66,1.2);
+  const plot=h-8-pb;
+  const grid=(ticks||[]).map(t=>{const y=(h-pb-(t/max)*plot).toFixed(1);
+    return `<line x1="${pl}" y1="${y}" x2="${W}" y2="${y}" stroke="var(--line)" stroke-width="1" stroke-dasharray="${t===0?'':'2 3'}"/>
+      <text x="${pl-5}" y="${(+y+3.5).toFixed(1)}" fill="var(--faint)" font-size="9.5" font-family="var(--mono)" text-anchor="end">${yfmt(t)}</text>`;}).join('');
+  return `<svg viewBox="0 0 ${W} ${h}" width="100%">`+grid+data.map((d,i)=>{
+    const x=pl+i*(W-pl)/data.length, bh=(d.v/max)*plot;
+    const lab=(i%labelEvery===0)?`<text x="${(x+bw/2).toFixed(1)}" y="${h-pb+13}" fill="var(--faint)" font-size="10" font-family="var(--mono)" text-anchor="middle">${d.l}</text>`:'';
+    return `<rect x="${x.toFixed(1)}" y="${(h-pb-bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(bh,0).toFixed(1)}" rx="2" fill="${d.c||'var(--accent)'}"/>${lab}
       <text x="${(x+bw/2).toFixed(1)}" y="${(h-pb-bh-4).toFixed(1)}" fill="var(--dim)" font-size="9.5" font-family="var(--mono)" text-anchor="middle">${d.t!=null?d.t:''}</text>`;
   }).join('')+`</svg>`;
 }
@@ -420,9 +451,26 @@ function renderRankHist(cases){
   cases.forEach(c=>{const r=c.first_hit_rank;if(!r)b.miss++;else if(r===1)b['#1']++;else if(r<=3)b['#2–3']++;else if(r<=5)b['#4–5']++;else b['#6–10']++;});
   const cols={'#1':'var(--good)','#2–3':'#4bbcd6','#4–5':'var(--warn)','#6–10':'#d98f4b','miss':'var(--crit)'};
   $('#rankhist').innerHTML=svgDonut(Object.entries(b).map(([label,value])=>({label,value,color:cols[label]})));
+  // O donut diz QUANTAS erraram o topo; sem isto o card não diz QUAIS — que é a pergunta seguinte.
+  const fora=cases.filter(c=>c.first_hit_rank!==1)
+    .sort((a,b)=>(b.first_hit_rank||99)-(a.first_hit_rank||99));
+  $('#rankmiss').innerHTML=!fora.length
+    ? `<span style="color:var(--faint)">todas as perguntas trouxeram o documento certo em #1.</span>`
+    : `<div class="misslist"><div class="misshead">não vieram em #1 · ${fora.length} de ${cases.length}</div>`
+      + fora.slice(0,8).map(c=>`<div class="row"><span class="rk">#${c.first_hit_rank||'miss'}</span>
+          <span class="q">${esc(c.query)}</span>
+          <span class="got">${short(c.ranked[0])}</span></div>`).join('')
+      + (fora.length>8?`<div class="more">+${fora.length-8} na aba Perguntas</div>`:'')
+      + `</div>`;
 }
 function renderPerQuery(cases){
-  $('#perquery').innerHTML=svgVBars([...cases].sort((a,b)=>b.rr-a.rr).map((c,i)=>({l:i+1,v:c.rr,t:'',c:c.rr>=1?'var(--good)':c.rr>0?'var(--accent)':'var(--crit)'})),{max:1});
+  const sorted=[...cases].sort((a,b)=>b.rr-a.rr);
+  const every=sorted.length>20?Math.ceil(sorted.length/12):1;
+  $('#perquery').innerHTML=svgVBars(sorted.map((c,i)=>({l:i+1,v:c.rr,t:'',c:c.rr>=1?'var(--good)':c.rr>0?'var(--accent)':'var(--crit)'})),
+    {max:1,ticks:[0,.5,1],labelEvery:every,yfmt:v=>v.toFixed(1)});
+  const n=sorted.length, um=sorted.filter(c=>c.rr>=1).length, zero=sorted.filter(c=>!c.rr).length;
+  $('#perqueryFoot').innerHTML=`<b>1.0</b> = documento certo em #1 · <b>0.5</b> = veio em #2 · <b>0</b> = fora do top-10`
+    +` <span style="color:var(--faint)">· ${um}/${n} em #1 · ${zero} sem acerto</span>`;
 }
 async function renderScatter(){
   const pr=await getProjection(); if(!pr||!pr.points)return;
@@ -433,9 +481,19 @@ async function renderScatter(){
     ctx.fillStyle=PALETTE[p[2]%PALETTE.length]; ctx.globalAlpha=.62; ctx.beginPath(); ctx.arc(x,y,2.1,0,7); ctx.fill();}
   ctx.globalAlpha=1;
   $('#scatterLeg').innerHTML=pr.groups.map((g,i)=>`<span><i style="background:${PALETTE[i%PALETTE.length]}"></i>${esc(g)}</span>`).join('')+` <span style="color:var(--faint)">· ${pr.points.length} chunks · var 2D ${pct(pr.var)}</span>`;
+  // Sem esta nota o scatter passa por mapa de similaridade, que ele não é: 2 de 1024 dimensões.
+  $('#scatterFoot').innerHTML=`Comprime <b>1024</b> dimensões em 2 — sobra <b>${pct(pr.var)}</b> da variância.`
+    +` <span style="color:var(--faint)">Serve pra ver aglomerado e ponto solto; distância aqui não é distância no espaço de busca.</span>`;
 }
 async function renderCoverage(){
   const cf=await getCoverage(); if(!cf||!cf.folders)return;
+  // Volume do indice (chunks/tokens/media) so existia no CLI — a tela media cobertura sem dizer de quanto.
+  const h=CURH;
+  if(h) $('#covstats').innerHTML=`<div class="statrow">`+[
+    ['documentos',h.n_source],['chunks',h.n_chunks],
+    ['tokens',h.n_tokens>=1e6?(h.n_tokens/1e6).toFixed(2)+'M':Math.round(h.n_tokens/1e3)+'k'],
+    ['chunks/doc',h.avg_chunks.toFixed(1)]
+  ].map(([l,v])=>`<div class="st"><div class="stv tnum">${v}</div><div class="stl">${l}</div></div>`).join('')+`</div>`;
   $('#covfolders').innerHTML=svgHBars(cf.folders.map(f=>{const fr=f.source?f.indexed/f.source:0;
     return {label:f.folder.length>14?f.folder.slice(0,13)+'…':f.folder,frac:fr,val:`${f.indexed}/${f.source}`,c:fr>=.95?'var(--good)':fr>=.6?'var(--warn)':'var(--crit)'};}));
 }
